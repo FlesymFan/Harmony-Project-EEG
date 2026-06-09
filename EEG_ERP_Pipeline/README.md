@@ -1,7 +1,12 @@
 # EEG ERP Pipeline
 
-This folder contains the ERP visualization pipeline for the Mehta Harmony / Context EEG project. It assumes that EEG preprocessing and trial averaging have already been completed, and it starts from the group-ready averaged subject files:
+This folder contains the ERP visualization pipeline. 
 
+REQUIRES / PREREQS: 
+- EEG preprocessing
+- Trial averaging
+
+The inputs to this pipeline are group-ready averaged subject files:
 - `EEGDataAvgAcrossTrials_allSubject_cond1.mat`
 - `EEGDataAvgAcrossTrials_allSubject_cond4.mat`
 - `EEGDataAvgAcrossTrials_allSubject_cond5.mat`
