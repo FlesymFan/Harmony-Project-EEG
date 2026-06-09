@@ -11,21 +11,15 @@ The inputs to this pipeline are group-ready averaged subject files:
 - `EEGDataAvgAcrossTrials_allSubject_cond4.mat`
 - `EEGDataAvgAcrossTrials_allSubject_cond5.mat`
 
-In the current project copy, these files represent the finished 15-subject dataset:
-
-`Sub1, Sub2, Sub5, Sub6, Sub8, Sub9, Sub10, Sub11, Sub12, Sub13, Sub14, Sub16, Sub17, Sub19, Sub20`
-
-Subjects 24-28 are not expected to be included yet. They should be preprocessed and folded into the dataset later.
-
 ## Conditions
 
 The pipeline uses three condition files:
 
-| Condition number | Label | Meaning |
-|---:|---|---|
-| 1 | Broadband | Broadband condition |
-| 4 | Low High | Low-to-high condition |
-| 5 | High Low | High-to-low condition |
+| Condition number | Label |
+|---:|---|
+| 1 | Broadband |
+| 4 | Low High |
+| 5 | High Low |
 
 Each subject-condition structure is expected to contain these fields:
 
