@@ -38,14 +38,16 @@ The plotting code derives difference waves internally:
 
 ### `S000_main.m`
 
-Interactive driver for the ERP plotting pipeline.
+Main driver for the ERP plotting pipeline.
 
-It asks whether to run the full preset figure set or a custom configuration:
+It asks whether to run the full preset figure set (31 figures) or a custom configuration:
 
 - Preset mode runs the full 31-figure set from `S1A0_getPresetConfigs.m`.
 - Custom mode either builds a config interactively using `S1B0_configBuilder.m` or loads a user-provided config function.
 
-For most standard analysis reruns, use preset mode.
+#### (Take this out later) For the conference paper, use preset mode.
+
+---
 
 ## Configuration Files
 
@@ -79,6 +81,8 @@ The presets cover:
 
 Interactive helper for making one custom plotting configuration without manually editing a config struct.
 
+---
+
 ## Pipeline Steps
 
 ### `S200_runOneConfig.m`
@@ -103,18 +107,24 @@ This function:
 - computes standard error across subjects
 - stores metadata such as subject names, channel names, and condition labels
 
-The current code loops over all subjects found in the loaded file, so it should automatically use the full current 15-subject dataset.
-
 ### `S220_timeBaselineInfo.m`
 
 Defines time-axis remapping and baseline windows.
 
-The pipeline maps each original waveform length onto a fixed 1-5000 remapped domain. By default:
+The pipeline maps each original waveform length onto a fixed internal 1-5000 remapped coordinate system. 
+#### Note: This internal coordinate is used for indexing, baseline selection, and onset placement. It is not exactly the same thing as the final x-axis labels shown on the figures.
 
-- full-trial plots use window `1:5000`
-- close-up target plots use window `3000:4000`
-- close-up baseline uses the pre-target range around `3000:3100`
-- full-trial baseline uses the first 100 remapped samples
+By default:
+- full-trial plots select internal window 1:5000
+- close-up target plots select internal window 3000:4000
+- close-up baseline uses the pre-target internal range between 3000:3100
+- full-trial baseline uses the first 100 internal samples
+
+The ROI and single-channel plotting functions then display only part of that selected window and relabel the x-axis:
+- full-waveform figures display internal x-limits 1:4600, with tick labels shifted. (i.e., internal 0/100/600/3100 corresponds to displayed -100/0/500/3000 ms
+- close-up figures display internal x-limits approximately 3000:3600, with tick labels shifted so internal 3000/3100 corresponds to displayed 2900/3000 ms
+
+So the visualization uses a shifted display convention: displayed time is internal remapped time minus 100 ms (for the purpose of indicating the baseline before the onset of the stimulus, in which we indicate that as t = 0)
 
 ### `S230_getROILabelAndIndices.m`
 
@@ -134,11 +144,13 @@ Dispatches plotting to the correct plotting function based on `cfg.plotMode`:
 - `singleChannel`
 - `multiChannel`
 
+---
+
 ## Plotting Files
 
 ### `S241_plotROI.m`
 
-Plots ROI-averaged ERP traces. This is the main plotting mode used by the preset 31-figure set.
+Plots ROI-averaged ERP traces.
 
 ### `S242_plotSingleChannel.m`
 
@@ -164,47 +176,6 @@ Example:
 
 `01_Full_Broadband_SP_LeftFrontal_cond1_Broadband_roiAverage.fig`
 
-## How To Run
-
-The scripts load data files by filename, so the averaged data files must be either:
-
-- in MATLAB's current folder, or
-- in a folder that has been added to the MATLAB path.
-
-Recommended run pattern:
-
-```matlab
-cd('path/to/Mehta/EEG_ERP_Pipeline')
-addpath('path/to/Mehta/Data')
-S000_main
-```
-
-Then choose preset mode when prompted:
-
-```text
-Use preset 31-figure set? (y/n): y
-```
-
-With this approach, figures will be saved to:
-
-```text
-Mehta/EEG_ERP_Pipeline/figures
-```
-
-Alternative run pattern:
-
-```matlab
-cd('path/to/Mehta/Data')
-addpath('path/to/Mehta/EEG_ERP_Pipeline')
-S000_main
-```
-
-With this approach, figures will be saved to:
-
-```text
-Mehta/Data/figures
-```
-
 ## Expected Outputs
 
 Preset mode should generate 31 `.fig` files:
@@ -213,26 +184,3 @@ Preset mode should generate 31 `.fig` files:
 - 9 target-window difference-wave figures
 - 9 target-window sensory-primed figures
 - 9 target-window non-primed figures
-
-The current project copy already contains a complete 31-file output set in:
-
-```text
-Mehta/EEG_ERP_Pipeline/figures
-```
-
-## Notes From Current Workspace Check
-
-The ERP pipeline was inspected against the current copied dataset. The data files used by this pipeline contain 15 subject fields, matching the current finished participant set.
-
-The code path in `S210_dataLoading.m` loops over all available subject fields, so the ERP pipeline itself does not appear to need changes before continuing preprocessing for subjects 24-28.
-
-During this check, MATLAB did not successfully run in the Codex desktop environment because MATLAB startup stopped before reaching project code:
-
-- default batch launch failed while loading a MATLAB settings plugin
-- using a temporary preference folder then failed with MathWorks services/licensing error 5202
-
-Because of that local MATLAB startup issue, this check confirms the pipeline by file structure and source inspection, not by a completed live MATLAB rerun.
-
-## Current Next Data Step
-
-The remaining data-work item is to finish preprocessing subjects 24-28, then regenerate the all-subject and averaged condition files before rerunning the ERP figures.
