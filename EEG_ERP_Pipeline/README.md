@@ -3,13 +3,42 @@
 This folder contains the ERP visualization pipeline. 
 
 REQUIRES / PREREQS: 
-- EEG preprocessing
-- Trial averaging
+- Preprocessing
+- Trial averaging for each subject
 
 The inputs to this pipeline are group-ready averaged subject files:
 - `EEGDataAvgAcrossTrials_allSubject_cond1.mat`
 - `EEGDataAvgAcrossTrials_allSubject_cond4.mat`
 - `EEGDataAvgAcrossTrials_allSubject_cond5.mat`
+
+
+## Note on Data Structure
+
+The input files named `EEGDataAvgAcrossTrials_allSubject_cond1/4/5.mat` contain separate subject entries, but within each subject, the trial dimension has already been averaged away. And it is organized like this:
+
+```text
+EEGDataAvgAcrossTrials_allSubject_cond1.mat
+  EEGDataAvg
+    Sub1_cond1
+      ExpwithSensPrim          = 64 channels x 5222 time
+      ExpwithoutSensPrim       = 64 channels x 5222 time
+      UnexpwithSensPrim        = 64 channels x 5222 time
+      UnexpwithoutSensPrim     = 64 channels x 5222 time
+      Atonal                   = 64 channels x 5222 time
+    Sub2_cond1
+      same 5 trial-category fields
+    ...
+```
+
+The ERP loader then stacks subjects into group arrays:
+
+```text
+subject-level input field:  channels x time
+group array in S210:        subjects x channels x time
+grand average output:       channels x time
+```
+
+---
 
 ## Conditions
 
