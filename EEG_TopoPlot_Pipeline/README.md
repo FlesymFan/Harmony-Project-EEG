@@ -101,9 +101,7 @@ cfg.plotConditions = {'Diff_withSP'};
 
 ### `main.m`
 
-Main script for the single-subject topoplot pipeline.
-
-It:
+Main driver for the topoplot pipeline:
 
 1. Loads default settings from `topoplotConfig.m`
 2. Optionally asks the user for custom settings with `topoplotConfigBuilder.m`
@@ -111,35 +109,25 @@ It:
 4. Computes baseline-corrected scalp values
 5. Creates the scalp topoplot figure
 6. Saves the figure as a MATLAB `.fig`
-
-To run:
-
-```matlab
-cd('path/to/Mehta/EEG_TopoPlot')
-addpath('path/to/Mehta/Data')
-main
-```
-
-The `Data` folder must be on the MATLAB path unless the `EEGDataAvgAcrossTrials_allSubject_cond*.mat` files are already in the current folder.
-
 ---
 
 ## Configuration Files
 
 ### `topoplotConfig.m`
 
-Defines the default settings for the pipeline. It includes:
+Defines the default settings for the pipeline. It includes variables
 
-- filtering condition number
 - subject index
+- filtering condition
 - topoplot window start
 - topoplot window width
-- chord onset locations
-- baseline length before chord onset
-- selected condition/contrast
-- output folder
+- condition/contrast to plot
 - whether to use interactive configuration
 
+#### And hyperparameters (hard-coded unless code change):
+- baseline length before chord onset
+- chord onset locations
+  
 Default settings:
 
 ```matlab
