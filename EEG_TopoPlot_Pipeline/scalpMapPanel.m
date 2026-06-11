@@ -1,4 +1,4 @@
-function hFig = scalpMapPanel(values, chanLabels, chanXY, clim, titleStr, ax, showColorbar)
+function hFig = scalpMapPanel(values, chanLabels, chanXY, clim, titleStr, ax, showColorbar, titleFontSize, labelFontSize, markerSize, showLabels)
 % Draw one scalp map into one axes.
 
 if nargin < 3
@@ -29,6 +29,18 @@ end
 if nargin < 7 || isempty(showColorbar)
     showColorbar = true;
 end
+if nargin < 8 || isempty(titleFontSize)
+    titleFontSize = 18;
+end
+if nargin < 9 || isempty(labelFontSize)
+    labelFontSize = 13;
+end
+if nargin < 10 || isempty(markerSize)
+    markerSize = 40;
+end
+if nargin < 11 || isempty(showLabels)
+    showLabels = true;
+end
 
 [xi, yi, zi] = scalpInterpolation(values, chanXY);
 
@@ -49,15 +61,16 @@ end
 
 headTemplate(ax);
 
-scatter(chanXY(:,1), chanXY(:,2), 40, 'k', 'filled');
+scatter(chanXY(:,1), chanXY(:,2), markerSize, 'k', 'filled');
 
-labelFontSize = 13;
-for k = 1:numel(values)
-    text(chanXY(k,1), chanXY(k,2), char(chanLabels(k)), ...
-        'HorizontalAlignment','center', ...
-        'VerticalAlignment','bottom', ...
-        'FontSize', labelFontSize, ...
-        'Color','k');
+if showLabels
+    for k = 1:numel(values)
+        text(chanXY(k,1), chanXY(k,2), char(chanLabels(k)), ...
+            'HorizontalAlignment','center', ...
+            'VerticalAlignment','bottom', ...
+            'FontSize', labelFontSize, ...
+            'Color','k');
+    end
 end
 
 axis equal off;
@@ -65,7 +78,7 @@ axis equal off;
 if ~isempty(titleStr)
     title(titleStr, ...
           'FontName','Arial', ...
-          'FontSize',18, ...
+          'FontSize', titleFontSize, ...
           'Interpreter','none');
 end
 

@@ -1,15 +1,15 @@
-function [EEGDataAvg, subjectNames, dataFile] = topoplotData(cfg)
+function [EEGDataAvg, subjectNames, dataFile] = loadData(cfg)
 % Load the averaged ERP data file used by the topoplot pipeline.
 
 dataFile = sprintf(cfg.dataFilePattern, cfg.conditionNumber);
 
 if exist(dataFile, 'file') ~= 2
-    error('topoplotData: data file "%s" not found.', dataFile);
+    error('loadData: data file "%s" not found.', dataFile);
 end
 
 tmp = load(dataFile);          % must contain EEGDataAvg
 if ~isfield(tmp, 'EEGDataAvg')
-    error('topoplotData: "%s" does not contain EEGDataAvg.', dataFile);
+    error('loadData: "%s" does not contain EEGDataAvg.', dataFile);
 end
 
 EEGDataAvg = tmp.EEGDataAvg;

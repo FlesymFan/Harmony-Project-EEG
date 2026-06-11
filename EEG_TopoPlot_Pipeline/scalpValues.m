@@ -1,23 +1,26 @@
-function [topoValuesAll, plotInfo] = topoplotScalpValues(EEGDataAvg, subjectNames, cfg)
+function [topoValuesAll, plotInfo] = scalpValues(EEGDataAvg, subjectNames, cfg)
 % Prepare the channel-level values that will be drawn on the scalp.
 %
 % This is the main neuroscience step for the topoplot pipeline:
-%   1) select the subject
+%   1) select the subject or subjects
 %   2) select the condition or contrast
 %   3) find the relevant chord onset
 %   4) baseline-correct the waveform
 %   5) average the selected topoplot time window
 
 nSubj = numel(subjectNames);
-subjectIndex = cfg.subjectIndex;
+subjectIndices = selectedSubjectIndices(cfg, nSubj);
+nSubjects = numel(subjectIndices);
 
-if isempty(subjectIndex) || ~isscalar(subjectIndex) || subjectIndex < 1 || subjectIndex > nSubj
-    error('topoplotScalpValues: cfg.subjectIndex must be one value within 1..%d.', nSubj);
+if nSubjects > 1
+    plotMode = 'multi';
+else
+    plotMode = 'single';
 end
 
 plotConditions = cfg.plotConditions;
 if isempty(plotConditions)
-    error('topoplotScalpValues: cfg.plotConditions is empty.');
+    error('scalpValues: cfg.plotConditions is empty.');
 end
 
 timeWindow_remap = [cfg.windowStart_remap, ...
@@ -25,56 +28,88 @@ timeWindow_remap = [cfg.windowStart_remap, ...
 
 chordOnsetsBeforeWindow = cfg.chordOnsets_remap(cfg.chordOnsets_remap <= timeWindow_remap(1));
 if isempty(chordOnsetsBeforeWindow)
-    error('topoplotScalpValues: no chord onset found before window start %d.', timeWindow_remap(1));
+    error('scalpValues: no chord onset found before window start %d.', timeWindow_remap(1));
 end
 
 baselineChordOnset_remap = chordOnsetsBeforeWindow(end);
 baselineWindow_remap = [baselineChordOnset_remap - cfg.baselineLength_remap, ...
                         baselineChordOnset_remap - 1];
 
-subjectName = subjectNames{subjectIndex};
-subjectData = EEGDataAvg.(subjectName);
 nConditions = numel(plotConditions);
 
 topoValuesAll = [];
 conditionLabels = strings(nConditions, 1);
+selectedSubjectNames = strings(nSubjects, 1);
 
-fprintf('Using subject %d of %d: %s\n', subjectIndex, nSubj, subjectName);
+fprintf('Using %d subject(s) of %d.\n', nSubjects, nSubj);
 
-for c = 1:nConditions
-    conditionName = plotConditions{c};
-    [wave, meta, conditionLabel] = conditionWave(subjectData, conditionName);
-    conditionLabels(c) = string(conditionLabel);
+for s = 1:nSubjects
+    subjectIndex = subjectIndices(s);
+    subjectName = subjectNames{subjectIndex};
+    subjectData = EEGDataAvg.(subjectName);
+    selectedSubjectNames(s) = string(subjectName);
 
-    [~, ~, idx_old] = topoplotTimeWindow(meta, cfg, timeWindow_remap);
-    [~, ~, baseline_idx_old] = topoplotTimeWindow(meta, cfg, baselineWindow_remap);
+    fprintf('Subject %d of %d: %s\n', subjectIndex, nSubj, subjectName);
 
-    baseline = mean(wave(:, baseline_idx_old), 2);
-    waveBC = wave - baseline;
-    topoValues = mean(waveBC(:, idx_old), 2);    % channels x 1
+    for c = 1:nConditions
+        conditionName = plotConditions{c};
+        [wave, meta, conditionLabel] = conditionWave(subjectData, conditionName);
 
-    fprintf('  %s: window [%d %d], baseline [%d %d], nChan = %d.\n', ...
-            conditionName, ...
-            timeWindow_remap(1), timeWindow_remap(2), ...
-            baselineWindow_remap(1), baselineWindow_remap(2), ...
-            meta.nChan);
+        if s == 1
+            conditionLabels(c) = string(conditionLabel);
+        end
 
-    if isempty(topoValuesAll)
-        topoValuesAll = zeros(numel(topoValues), nConditions);
+        [~, ~, idx_old] = timeWindow(meta, cfg, timeWindow_remap);
+        [~, ~, baseline_idx_old] = timeWindow(meta, cfg, baselineWindow_remap);
+
+        baseline = mean(wave(:, baseline_idx_old), 2);
+        waveBC = wave - baseline;
+        topoValues = mean(waveBC(:, idx_old), 2);    % channels x 1
+
+        fprintf('  %s: window [%d %d], baseline [%d %d], nChan = %d.\n', ...
+                conditionName, ...
+                timeWindow_remap(1), timeWindow_remap(2), ...
+                baselineWindow_remap(1), baselineWindow_remap(2), ...
+                meta.nChan);
+
+        if isempty(topoValuesAll)
+            topoValuesAll = zeros(numel(topoValues), nConditions, nSubjects);
+        end
+
+        topoValuesAll(:, c, s) = topoValues;
     end
-
-    topoValuesAll(:, c) = topoValues;
 end
 
 plotInfo = struct();
-plotInfo.subjectIndex = subjectIndex;
-plotInfo.subjectName = string(subjectName);
+plotInfo.plotMode = plotMode;
+plotInfo.subjectIndices = subjectIndices;
+plotInfo.subjectNames = selectedSubjectNames;
+plotInfo.subjectIndex = subjectIndices(1);
+plotInfo.subjectName = selectedSubjectNames(1);
+plotInfo.nSubjects = nSubjects;
 plotInfo.conditionNames = string(plotConditions);
 plotInfo.conditionLabels = conditionLabels;
 plotInfo.timeWindow_remap = timeWindow_remap;
 plotInfo.baselineChordOnset_remap = baselineChordOnset_remap;
 plotInfo.baselineWindow_remap = baselineWindow_remap;
 plotInfo.conditionNumber = cfg.conditionNumber;
+end
+
+function subjectIndices = selectedSubjectIndices(cfg, nSubj)
+    if isfield(cfg, 'subjectIndices') && ~isempty(cfg.subjectIndices)
+        subjectIndices = cfg.subjectIndices;
+    elseif isfield(cfg, 'subjectIndex') && ~isempty(cfg.subjectIndex)
+        subjectIndices = cfg.subjectIndex;
+    else
+        subjectIndices = 1;
+    end
+
+    subjectIndices = subjectIndices(:)';
+
+    if any(~isfinite(subjectIndices)) || any(subjectIndices < 1) || ...
+       any(subjectIndices ~= round(subjectIndices)) || any(subjectIndices > nSubj)
+        error('scalpValues: subject indices must be positive integers within 1..%d.', nSubj);
+    end
 end
 
 function [wave, meta, label] = conditionWave(subjectData, conditionName)
@@ -114,7 +149,7 @@ switch conditionName
         label = 'Atonal';
 
     otherwise
-        error('topoplotScalpValues: unknown condition "%s".', conditionName);
+        error('scalpValues: unknown condition "%s".', conditionName);
 end
 
 meta = struct();
@@ -125,7 +160,7 @@ end
 
 function erp = fieldERP(subjectData, fieldName)
     if ~isfield(subjectData, fieldName)
-        error('topoplotScalpValues: subject is missing field "%s".', fieldName);
+        error('scalpValues: subject is missing field "%s".', fieldName);
     end
 
     data = subjectData.(fieldName);

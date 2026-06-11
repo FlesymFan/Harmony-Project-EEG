@@ -1,4 +1,4 @@
-function [chanLabels, chanXY] = topoplotChannelLayout()
+function [chanLabels, chanXY] = channelLayout()
 % 64-channel cap labels and approximate XY positions for topoplots.
 
 chanLabels = dataChannelLabels64();
@@ -11,7 +11,7 @@ rows = {
     ["AF7","AF3","AFz","AF4","AF8"];
     ["F7","F5","F3","F1","Fz","F2","F4","F6","F8"];
     ["FT7","FC5","FC3","FC1","FCz","FC2","FC4","FC6","FT8"];
-    ["T7","C5","C3","Cz","C2","C4","C6","T8"];
+    ["T7","C5","C3","C1","Cz","C2","C4","C6","T8"];
     ["TP7","CP5","CP3","CP1","CPz","CP2","CP4","CP6","TP8"];
     ["P9","P7","P5","P3","P1","Pz","P2","P4","P6","P8","P10"];
     ["PO7","PO3","Poz","PO4","PO8"];
@@ -40,7 +40,7 @@ for k = 1:nChan
     if isKey(coordsMap, lab)
         chanXY(k,:) = coordsMap(lab);
     else
-        warning('topoplotChannelLayout: label "%s" not in row layout; placing at (0,0).', lab);
+        warning('channelLayout: label "%s" not in row layout; placing at (0,0).', lab);
         chanXY(k,:) = [0 0];
     end
 end
@@ -61,7 +61,7 @@ labels( 8) = "FT7";
 labels( 9) = "FC5";
 labels(10) = "FC3";
 labels(11) = "FC1";
-labels(12) = "FCz";
+labels(12) = "C1";
 labels(13) = "C3";
 labels(14) = "C5";
 labels(15) = "T7";
