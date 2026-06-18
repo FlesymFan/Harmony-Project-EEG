@@ -1,6 +1,18 @@
 # EEG Preprocessing Pipeline
 
-This folder contains the preprocessing pipeline. It converts raw or partially processed EEG data into the `.mat` files used by the ERP and topoplot pipelines.
+This folder contains the cleaned-up preprocessing pipeline for the Mehta Harmony / Context EEG project. It converts raw or partially processed EEG data into the `.mat` files used by the ERP and topoplot pipelines.
+
+The pipeline is intentionally stage-by-stage. There is no single main driver, because some stages require human judgment in EEGLAB, especially channel/epoch inspection and ICA component rejection.
+
+The original root-level scripts are kept as historical references:
+
+```text
+Analysis_ContextEEG_Step1_noICA.m
+Analysis_ContextEEG_Step2_withICA.m
+Context_EEGAnalyses_Step3.m
+```
+
+The official pipeline-facing versions live in this folder.
 
 ## Data Folder
 

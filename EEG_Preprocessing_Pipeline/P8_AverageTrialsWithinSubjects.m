@@ -76,7 +76,7 @@ fprintf('Done averaging subject trials.\n');
 end
 
 function cfg = defaultConfig()
-    % The user chooses the Data folder; no machine-specific path is assumed.
+    % The user chooses the Data folder; no default path is assumed.
     cfg.dataRoot = '';
     cfg = applyDataRoot(cfg);
     cfg.conditions = [1 4 5];

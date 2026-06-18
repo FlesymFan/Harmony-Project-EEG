@@ -161,13 +161,11 @@ function cfg = promptConfig(cfg)
     cfg.dataRoot = promptDataRoot(cfg.dataRoot);
     cfg = applyDataRoot(cfg);
 
-    cfg.subjects = subjectsFromFolder(cfg.subjectDataRoot);
+    cfg.subjects = subjectsWithP5SourceFiles(cfg.subjectDataRoot);
     cfg.subjects = promptSubjectVector('Subject numbers', cfg.subjects);
     cfg.conditions = promptAllowedNumericVector('Condition numbers (1/4/5)', ...
                                                cfg.conditions, [1 4 5]);
     cfg.runs = promptAllowedNumericVector('Run numbers (1/2)', cfg.runs, [1 2]);
-    cfg.overwriteExisting = promptYesNo('Overwrite existing final cleaned files?', ...
-                                        cfg.overwriteExisting);
     cfg.confirmBeforeRun = true;
 end
 
@@ -209,8 +207,8 @@ end
 
 function printStageIntro()
     fprintf('\nP5: Interpolate removed channels\n');
-    fprintf(['Expected input: manually ICA-cleaned .set files, usually *_withICA2_cleaned.set. ' ...
-             'Output: final cleaned files restored to the full 64-channel BioSemi layout.\n\n']);
+    fprintf('Expected input: manually ICA-cleaned .set files, usually *_withICA2_cleaned.set.\n');
+    fprintf('Output: final cleaned files restored to the full 64-channel BioSemi layout.\n\n');
 end
 
 function validateRequestedInputs(cfg)
@@ -396,7 +394,8 @@ function dataRoot = promptDataRoot(defaultPath)
     msg = inputMessages();
 
     while true
-        dataRoot = promptExistingPath('Data folder', defaultPath, true);
+        selectedPath = promptExistingPath('Data folder', defaultPath, true);
+        dataRoot = resolveDataRoot(selectedPath);
         subjectDataRoot = fullfile(dataRoot, 'Subject Data');
         trialOrderRoot = fullfile(dataRoot, 'Context Trial Order');
 
@@ -405,10 +404,35 @@ function dataRoot = promptDataRoot(defaultPath)
         end
 
         fprintf('%s\n', msg.invalidDataStructure);
-        fprintf('  Expected: %s\n', subjectDataRoot);
-        fprintf('  Expected: %s\n', trialOrderRoot);
-        defaultPath = dataRoot;
+        defaultPath = selectedPath;
     end
+end
+
+function dataRoot = resolveDataRoot(pathIn)
+    % Accept the Data folder itself, its parent project folder, or common subfolders inside it.
+    pathIn = char(pathIn);
+    [parentPath, folderName] = fileparts(pathIn);
+
+    childDataRoot = fullfile(pathIn, 'Data');
+    if exist(fullfile(childDataRoot, 'Subject Data'), 'dir') == 7 && ...
+       exist(fullfile(childDataRoot, 'Context Trial Order'), 'dir') == 7
+        dataRoot = childDataRoot;
+        return;
+    end
+
+    if strcmpi(folderName, 'Subject Data') || strcmpi(folderName, 'Context Trial Order')
+        dataRoot = parentPath;
+        return;
+    end
+
+    [grandParentPath, parentName] = fileparts(parentPath);
+    if startsWith(folderName, 'Sub', 'IgnoreCase', true) && ...
+       (strcmpi(parentName, 'Subject Data') || strcmpi(parentName, 'Context Trial Order'))
+        dataRoot = grandParentPath;
+        return;
+    end
+
+    dataRoot = pathIn;
 end
 
 function pathOut = promptExistingPath(label, defaultPath, requireAnswer)
@@ -550,6 +574,38 @@ function subjects = subjectsFromFolder(rootPath)
     end
 
     subjects = sort(subjects);
+end
+
+function subjects = subjectsWithP5SourceFiles(rootPath)
+    % P5 should default only to subjects with run-level .set files it can interpolate.
+    allSubjects = subjectsFromFolder(rootPath);
+    subjects = [];
+
+    for i = 1:numel(allSubjects)
+        subID = allSubjects(i);
+        subPath = fullfile(rootPath, sprintf('Sub%d', subID));
+
+        if hasAnyP5SourceFile(subPath)
+            subjects(end+1) = subID; %#ok<AGROW>
+        end
+    end
+end
+
+function tf = hasAnyP5SourceFile(subPath)
+    patterns = { ...
+        '*_withICA2_cleaned.set', ...
+        '*_withICA2_B31removed_cleaned.set', ...
+        '*_withICA2_B25removed_cleaned.set', ...
+        '*_withICA2_B31removed.set', ...
+        '*_withICA2_B25removed.set'};
+
+    tf = false;
+    for i = 1:numel(patterns)
+        if ~isempty(dir(fullfile(subPath, patterns{i})))
+            tf = true;
+            return;
+        end
+    end
 end
 
 function textOut = promptWithOptionalDefault(label, defaultPath)
