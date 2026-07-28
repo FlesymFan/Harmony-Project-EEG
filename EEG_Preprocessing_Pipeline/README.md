@@ -1,7 +1,5 @@
 # EEG Preprocessing Pipeline
 
-Purpose: Converts raw or partially processed EEG data into the `.mat` files used by the ERP and topoplot pipelines.
-
 ## Data Folder
 
 The `Data` folder can live anywhere on a user's computer. When a preprocessing function asks for the data folder, give the path to the `Data` folder itself.
