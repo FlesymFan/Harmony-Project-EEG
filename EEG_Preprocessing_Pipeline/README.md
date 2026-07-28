@@ -2,14 +2,6 @@
 
 Purpose: Converts raw or partially processed EEG data into the `.mat` files used by the ERP and topoplot pipelines.
 
-The original root-level scripts are kept as historical references:
-
-```text
-Analysis_ContextEEG_Step1_noICA.m
-Analysis_ContextEEG_Step2_withICA.m
-Context_EEGAnalyses_Step3.m
-```
-
 ## Data Folder
 
 The `Data` folder can live anywhere on a user's computer. When a preprocessing function asks for the data folder, give the path to the `Data` folder itself.
