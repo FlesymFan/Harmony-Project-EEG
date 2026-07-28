@@ -198,7 +198,7 @@ P3_EpochedNoICAToICA
 
 After P3, inspect and reject ICA components in EEGLAB.
 
-What has been done:
+Expected Input (What has been done):
 
 ```text
 Sub1_Cond1_run1_noICA.set
@@ -211,7 +211,7 @@ What to do:
 - reject clear eye blink, eye movement, muscle, or channel-noise components
 - do not reject a component only because ICLabel says it is not "Brain"
 
-What to save:
+Expected Output
 
 Save the manually cleaned file as:
 
