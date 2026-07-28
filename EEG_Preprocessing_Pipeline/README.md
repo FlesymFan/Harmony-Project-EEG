@@ -117,8 +117,7 @@ P1_RawBDFToEpochedNoICA
 
 After P1, inspect each `*_noICA.set` file in EEGLAB.
 
-What has been done:
-
+Expected Input (what has been done since P1)
 ```text
 Sub1_Cond1_run1.bdf
     -> Sub1_Cond1_run1_noICA.set
@@ -130,8 +129,7 @@ What to do:
 - inspect epochs/trials
 - remove only clearly bad channels or clearly bad epochs before ICA
 
-What to save:
-
+Expected Output
 If nothing was removed, keep:
 
 ```text
@@ -150,24 +148,6 @@ If epochs were rejected, include that in the name:
 Sub1_Cond1_run1_noICA_epochRejected.set
 Sub1_Cond1_run1_noICA_B31removed_epochRejected.set
 ```
-
-Current examples:
-
-```text
-Sub27_Cond#_run#_noICA_B31removed.set
-Sub28_Cond#_run#_noICA_B25removed.set
-```
-
-Current mapping:
-
-```text
-B31 = PO4
-B25 = P2
-```
-
-What to do next:
-
-Run `P3_EpochedNoICAToICA.m`.
 
 ## P3: Epoched No-ICA Set To ICA Set
 
