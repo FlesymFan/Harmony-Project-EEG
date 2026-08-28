@@ -6,19 +6,19 @@ Input:
 results = P0_Main();
 ```
 
-## Steps
+## Overview
 
 ```
 P1  config
-P2  prepare data                         shared
+P2  prepare data
       |
-      +-- P3B  cluster permutation       branch B, nonparametric
-      |   P4B  cluster summary
-      |
-      +-- P3A  mean amplitude            branch A, parametric
+      +-- P3A  mean amplitude            branch A, parametric (ANOVA)
       |   P4A  rmANOVA and t-tests
       |
-P5  save                                 shared
+      +-- P3B  cluster permutation       branch B, nonparametric (Cluster-based permutation)
+      |   P4B  cluster summary
+      |
+P5  save
 ```
 
 `P0_Main` runs branch B before branch A. Branch B needs no latency window and
