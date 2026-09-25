@@ -1,6 +1,7 @@
 function outputFiles = P5_InterpolateRemovedChannels(varargin)
 % Expected input: manually ICA-cleaned .set files in Data/Subject Data/Sub#.
 % Example input: Data/Subject Data/Sub1/Sub1_Cond1_run1_withICA2_B31removed_cleaned.set
+% Any valid A1-A32 or B1-B32 removed-channel suffix is detected automatically.
 
 % If no channel was removed, the input can already be *_withICA2_cleaned.set.
 
@@ -107,7 +108,7 @@ for iSub = 1:numel(cfg.subjects)
                 end
 
                 if strcmp(sourceFile, outFile)
-                    backupExistingDataset(outFile);
+                    backupExistingDataset(EEG, outFile);
                 elseif exist(outFile, 'file') == 2 && ~cfg.overwriteExisting
                     warning('Final file exists and overwriteExisting is false: %s. Skipping.', outFile);
                     continue;
@@ -293,42 +294,73 @@ function [sourceFile, sourceKind] = findSourceFile(subPath, subID, condNumber, r
     sourceFile = '';
     sourceKind = '';
 
-    bases = { ...
-        sprintf('Sub%d_Cond%d_run%d_withICA2_B31removed_cleaned', subID, condNumber, runNumber), 'withICA2_B31removed_cleaned'; ...
-        sprintf('Sub%d_Cond%d_run%d_withICA2_B25removed_cleaned', subID, condNumber, runNumber), 'withICA2_B25removed_cleaned'; ...
-        sprintf('Sub%d_Cond%d_run%d_withICA2_B31removed',         subID, condNumber, runNumber), 'withICA2_B31removed'; ...
-        sprintf('Sub%d_Cond%d_run%d_withICA2_B25removed',         subID, condNumber, runNumber), 'withICA2_B25removed'; ...
-        sprintf('Sub%d_cond%d_run%d_withICA2_B31removed_cleaned', subID, condNumber, runNumber), 'withICA2_B31removed_cleaned'; ...
-        sprintf('Sub%d_cond%d_run%d_withICA2_B25removed_cleaned', subID, condNumber, runNumber), 'withICA2_B25removed_cleaned'; ...
-        sprintf('Sub%d_cond%d_run%d_withICA2_B31removed',         subID, condNumber, runNumber), 'withICA2_B31removed'; ...
-        sprintf('Sub%d_cond%d_run%d_withICA2_B25removed',         subID, condNumber, runNumber), 'withICA2_B25removed'};
+    prefix = sprintf('Sub%d_Cond%d_run%d_withICA2', ...
+                     subID, condNumber, runNumber);
+    removedToken = '_(?:A|B)(?:[1-9]|[12][0-9]|3[0-2])removed';
+    pattern = ['^' regexptranslate('escape', prefix) ...
+               '(?:' removedToken ')+(?:_epochRejected)?(?<cleaned>_cleaned)?$'];
+    setFiles = dir(fullfile(subPath, '*.set'));
+    candidates = struct('path', {}, 'name', {}, 'isCleaned', {});
 
-    for i = 1:size(bases, 1)
-        candidate = fullfile(subPath, [bases{i, 1} '.set']);
-        if exist(candidate, 'file') == 2
-            sourceFile = candidate;
-            sourceKind = bases{i, 2};
-            return;
+    for iFile = 1:numel(setFiles)
+        [~, baseName] = fileparts(setFiles(iFile).name);
+        match = regexpi(baseName, pattern, 'names', 'once');
+        if isempty(match)
+            continue;
         end
+
+        candidates(end+1).path = fullfile(setFiles(iFile).folder, ...
+                                          setFiles(iFile).name); %#ok<AGROW>
+        candidates(end).name = baseName;
+        candidates(end).isCleaned = ~isempty(match.cleaned);
     end
+
+    if isempty(candidates)
+        return;
+    end
+
+    preferred = find([candidates.isCleaned]);
+    if isempty(preferred)
+        preferred = 1:numel(candidates);
+    end
+    if numel(preferred) > 1
+        names = {candidates(preferred).name};
+        error(['Multiple P5 source files match Sub%d Cond%d Run%d: %s. ' ...
+               'Keep only one current file at the preferred processing stage.'], ...
+              subID, condNumber, runNumber, strjoin(names, ', '));
+    end
+
+    selected = candidates(preferred);
+    sourceFile = selected.path;
+    sourceKind = selected.name;
 end
 
-function backupExistingDataset(setFile)
+function backupExistingDataset(EEG, setFile)
     [folderPath, baseName, ext] = fileparts(setFile);
-    backupSet = fullfile(folderPath, [baseName '_beforeInterpolation' ext]);
+    backupBaseName = [baseName '_beforeInterpolation'];
+    backupSetName = [backupBaseName ext];
+    backupFdtName = [backupBaseName '.fdt'];
+    backupSet = fullfile(folderPath, backupSetName);
+    backupFdt = fullfile(folderPath, backupFdtName);
 
-    if exist(backupSet, 'file') ~= 2
-        copyfile(setFile, backupSet);
-        fprintf('    Backed up pre-interpolation SET: %s\n', backupSet);
+    % Save through EEGLAB so the backup SET points to its own backup FDT.
+    EEGBackup = EEG;
+    EEGBackup.setname = [EEG.setname ' before interpolation'];
+    EEGBackup = pop_saveset(EEGBackup, ...
+        'filename', backupSetName, ...
+        'filepath', folderPath, ...
+        'savemode', 'twofiles');
+
+    if exist(backupSet, 'file') ~= 2 || exist(backupFdt, 'file') ~= 2
+        error('Could not create a complete pre-interpolation backup for %s.', setFile);
     end
 
-    fdtFile = fullfile(folderPath, [baseName '.fdt']);
-    backupFdt = fullfile(folderPath, [baseName '_beforeInterpolation.fdt']);
-
-    if exist(fdtFile, 'file') == 2 && exist(backupFdt, 'file') ~= 2
-        copyfile(fdtFile, backupFdt);
-        fprintf('    Backed up pre-interpolation FDT: %s\n', backupFdt);
+    if ~isfield(EEGBackup, 'datfile') || ...
+            ~strcmpi(fileNameOnly(EEGBackup.datfile), backupFdtName)
+        error('The pre-interpolation backup does not point to its own FDT: %s', backupSet);
     end
+
+    fprintf('    Saved independent pre-interpolation backup: %s\n', backupSet);
 end
 
 function validateFinalLayout(EEG, fullLabelsLower, expectedNChannels, sourceFile)
@@ -592,16 +624,18 @@ function subjects = subjectsWithP5SourceFiles(rootPath)
 end
 
 function tf = hasAnyP5SourceFile(subPath)
-    patterns = { ...
-        '*_withICA2_cleaned.set', ...
-        '*_withICA2_B31removed_cleaned.set', ...
-        '*_withICA2_B25removed_cleaned.set', ...
-        '*_withICA2_B31removed.set', ...
-        '*_withICA2_B25removed.set'};
+    setFiles = dir(fullfile(subPath, '*.set'));
+    standardPattern = ['^Sub[0-9]+_Cond[0-9]+_run[0-9]+_withICA2_cleaned' ...
+                       '$'];
+    removedPattern = ['^Sub[0-9]+_Cond[0-9]+_run[0-9]+_withICA2' ...
+                      '(?:_(?:A|B)(?:[1-9]|[12][0-9]|3[0-2])removed)+' ...
+                      '(?:_epochRejected)?(?:_cleaned)?$'];
 
     tf = false;
-    for i = 1:numel(patterns)
-        if ~isempty(dir(fullfile(subPath, patterns{i})))
+    for iFile = 1:numel(setFiles)
+        [~, baseName] = fileparts(setFiles(iFile).name);
+        if ~isempty(regexpi(baseName, standardPattern, 'once')) || ...
+                ~isempty(regexpi(baseName, removedPattern, 'once'))
             tf = true;
             return;
         end

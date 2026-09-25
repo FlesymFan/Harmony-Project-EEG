@@ -39,6 +39,13 @@ If a channel was removed, save with the removed channel in the name:
 Sub##_Cond#_run#_noICA_B##removed.set
 ```
 
+If more than one channel was removed, include every acquisition-channel
+label as a separate suffix, for example:
+
+```text
+Sub##_Cond#_run#_noICA_A12removed_B31removed.set
+```
+
 Current examples:
 
 ```text

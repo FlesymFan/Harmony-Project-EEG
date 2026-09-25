@@ -7,8 +7,9 @@ function outputFiles = P3_EpochedNoICAToICA(varargin)
 % Output: ICA-decomposed .set/.fdt files in Data/Subject Data/Sub#.
 % Example output: Data/Subject Data/Sub1/Sub1_Cond1_run1_withICA2.set
 
-% If a channel was removed in P2, the output keeps that note in the name:
-% Data/Subject Data/Sub1/Sub1_Cond1_run1_withICA2_B31removed.set
+% If channels were removed in P2, P3 detects the filename notes and keeps
+% them in the output, for example *_noICA_A12removed_B31removed.set becomes
+% *_withICA2_A12removed_B31removed.set.
 
 % Processing: filter 0.5-10 Hz, apply BioSemi64.loc, remove any channel
 % locations that were rejected during P2, and run extended ICA.
@@ -65,35 +66,26 @@ for iSub = 1:numel(cfg.subjects)
         continue;
     end
 
-    subjectSettings = settingsForSubject(cfg, subID);
-
     fprintf('=== %s ===\n', subName);
-    if ~isempty(subjectSettings.removedChannelLabel)
-        fprintf('  Using reduced channel layout without %s.\n', ...
-                subjectSettings.removedChannelLabel);
-    end
 
     for iCond = 1:numel(cfg.conditions)
         condNumber = cfg.conditions(iCond);
 
         for iRun = 1:numel(cfg.runs)
             runNumber = cfg.runs(iRun);
-            inputFile = fullfile(subPath, sprintf( ...
-                'Sub%d_Cond%d_run%d%s', ...
-                subID, condNumber, runNumber, subjectSettings.inputSuffix));
-            outputFile = fullfile(subPath, sprintf( ...
-                'Sub%d_Cond%d_run%d%s', ...
-                subID, condNumber, runNumber, subjectSettings.outputSuffix));
+            [inputFile, outputFile, removedChannelIDs] = findP3Files( ...
+                subPath, subID, condNumber, runNumber);
+
+            if isempty(inputFile)
+                warning(['Missing inspected no-ICA source for Sub%d Cond%d ' ...
+                         'Run%d. Skipping.'], subID, condNumber, runNumber);
+                continue;
+            end
 
             if exist(outputFile, 'file') == 2 && ~cfg.overwriteExisting
                 fprintf('  Cond %d Run %d: skipping existing %s\n', ...
                         condNumber, runNumber, fileNameOnly(outputFile));
                 outputFiles{end+1} = outputFile; %#ok<AGROW>
-                continue;
-            end
-
-            if exist(inputFile, 'file') ~= 2
-                warning('Missing no-ICA source file: %s. Skipping.', inputFile);
                 continue;
             end
 
@@ -112,14 +104,24 @@ for iSub = 1:numel(cfg.subjects)
                 'hicutoff', cfg.icaFilterHz(2));
             [ALLEEG, EEG, CURRENTSET] = pop_newset(ALLEEG, EEG, 1, 'gui', 'off');
 
-            % Apply the BioSemi scalp-channel locations. If a channel was
-            % removed during P2, use the same template with that one location
-            % omitted so the location count matches the data.
+            % Apply the BioSemi scalp-channel locations. Removed acquisition
+            % channels are read from the filename and omitted from the same
+            % universal 64-channel template.
             EEG = eeg_checkset(EEG);
-            EEG.chanlocs = channelLocationsForDataset( ...
+            [datasetChanlocs, removedScalpLabels] = channelLocationsForDataset( ...
                 cfg.fullChannelLocationFile, ...
-                subjectSettings.removedChannelLabel, ...
-                EEG.nbchan);
+                removedChannelIDs, EEG.nbchan, inputFile);
+            EEG.chanlocs = datasetChanlocs;
+
+            if ~isempty(removedChannelIDs)
+                removedSummary = cell(1, numel(removedChannelIDs));
+                for iRemoved = 1:numel(removedChannelIDs)
+                    removedSummary{iRemoved} = sprintf('%s (%s)', ...
+                        removedChannelIDs{iRemoved}, removedScalpLabels{iRemoved});
+                end
+                fprintf('    Filename reports removed channel(s): %s\n', ...
+                        strjoin(removedSummary, ', '));
+            end
 
             if ~isempty(cfg.lookupFile)
                 EEG = pop_chanedit(EEG, 'lookup', cfg.lookupFile);
@@ -167,9 +169,6 @@ function cfg = defaultConfig()
     cfg.icaFilterHz = [0.5 10];
     cfg.icaType = 'runica';
     cfg.extendedICA = 1;
-    cfg.defaultInputSuffix = '_noICA.set';
-    cfg.defaultOutputSuffix = '_withICA2.set';
-    cfg.subjectOverrides = defaultSubjectOverrides();
     cfg.overwriteExisting = false;
     cfg.confirmBeforeRun = true;
 end
@@ -178,20 +177,6 @@ function cfg = applyDataRoot(cfg)
     % The standardized Data folder gives P3 its subject folders.
     cfg.subjectDataRoot = fullfile(cfg.dataRoot, 'Subject Data');
     cfg.trialOrderRoot = fullfile(cfg.dataRoot, 'Context Trial Order');
-end
-
-function overrides = defaultSubjectOverrides()
-    overrides = struct();
-
-    overrides.Sub27 = struct( ...
-        'inputSuffix', '_noICA_B31removed.set', ...
-        'outputSuffix', '_withICA2_B31removed.set', ...
-        'removedChannelLabel', 'PO4');
-
-    overrides.Sub28 = struct( ...
-        'inputSuffix', '_noICA_B25removed.set', ...
-        'outputSuffix', '_withICA2_B25removed.set', ...
-        'removedChannelLabel', 'P2');
 end
 
 function pathOut = defaultLookupFile()
@@ -244,8 +229,6 @@ function cfg = parseConfig(cfg, varargin)
                 cfg.conditions = value(:)';
             case 'runs'
                 cfg.runs = value(:)';
-            case 'subjectoverrides'
-                cfg.subjectOverrides = value;
             case 'overwriteexisting'
                 cfg.overwriteExisting = logical(value);
             case {'confirmbeforerun', 'confirm'}
@@ -294,18 +277,17 @@ function validateRequestedInputs(cfg)
     for iSub = 1:numel(cfg.subjects)
         subID = cfg.subjects(iSub);
         subPath = fullfile(cfg.subjectDataRoot, sprintf('Sub%d', subID));
-        subjectSettings = settingsForSubject(cfg, subID);
-
         for iCond = 1:numel(cfg.conditions)
             condNumber = cfg.conditions(iCond);
             for iRun = 1:numel(cfg.runs)
                 runNumber = cfg.runs(iRun);
-                inputFile = fullfile(subPath, sprintf( ...
-                    'Sub%d_Cond%d_run%d%s', ...
-                    subID, condNumber, runNumber, subjectSettings.inputSuffix));
+                [inputFile, ~] = findP3Files( ...
+                    subPath, subID, condNumber, runNumber);
 
-                if exist(inputFile, 'file') ~= 2
-                    missingFiles{end+1} = inputFile; %#ok<AGROW>
+                if isempty(inputFile)
+                    missingFiles{end+1} = fullfile(subPath, sprintf( ...
+                        'Sub%d_Cond%d_run%d_noICA*.set', ...
+                        subID, condNumber, runNumber)); %#ok<AGROW>
                 end
             end
         end
@@ -346,40 +328,142 @@ function printFileList(files)
     end
 end
 
-function subjectSettings = settingsForSubject(cfg, subID)
-    subjectSettings = struct( ...
-        'inputSuffix', cfg.defaultInputSuffix, ...
-        'outputSuffix', cfg.defaultOutputSuffix, ...
-        'removedChannelLabel', '');
+function [inputFile, outputFile, removedChannelIDs] = findP3Files( ...
+        subPath, subID, condNumber, runNumber)
+    inputFile = '';
+    outputFile = '';
+    removedChannelIDs = {};
 
-    fieldName = sprintf('Sub%d', subID);
-    if isstruct(cfg.subjectOverrides) && isfield(cfg.subjectOverrides, fieldName)
-        override = cfg.subjectOverrides.(fieldName);
-        overrideFields = fieldnames(override);
+    inputPrefix = sprintf('Sub%d_Cond%d_run%d_noICA', ...
+                          subID, condNumber, runNumber);
+    setFiles = dir(fullfile(subPath, '*.set'));
+    candidates = struct('path', {}, 'suffix', {}, 'removedIDs', {});
+    unsupportedNames = {};
 
-        for iField = 1:numel(overrideFields)
-            thisField = overrideFields{iField};
-            subjectSettings.(thisField) = override.(thisField);
+    for iFile = 1:numel(setFiles)
+        [~, baseName] = fileparts(setFiles(iFile).name);
+        match = regexpi(baseName, ...
+            ['^' regexptranslate('escape', inputPrefix) '(?<suffix>.*)$'], ...
+            'names', 'once');
+        if isempty(match)
+            continue;
+        end
+
+        [isValid, ids] = parseP3Suffix(match.suffix);
+        if ~isValid
+            unsupportedNames{end+1} = setFiles(iFile).name; %#ok<AGROW>
+            continue;
+        end
+
+        candidates(end+1).path = fullfile(setFiles(iFile).folder, ...
+                                          setFiles(iFile).name); %#ok<AGROW>
+        candidates(end).suffix = match.suffix;
+        candidates(end).removedIDs = ids;
+    end
+
+    if ~isempty(unsupportedNames)
+        error(['Unsupported P3 input suffix for Sub%d Cond%d Run%d: %s. ' ...
+               'Use only _A#removed, _B#removed, and optional ' ...
+               '_epochRejected filename notes.'], ...
+              subID, condNumber, runNumber, strjoin(unsupportedNames, ', '));
+    end
+
+    if isempty(candidates)
+        return;
+    end
+
+    % A suffixed P2 result is newer than the retained plain P1 file.
+    isProcessed = ~cellfun(@isempty, {candidates.suffix});
+    preferred = find(isProcessed);
+    if isempty(preferred)
+        preferred = 1:numel(candidates);
+    end
+
+    if numel(preferred) > 1
+        names = cell(1, numel(preferred));
+        for iCandidate = 1:numel(preferred)
+            names{iCandidate} = fileNameOnly(candidates(preferred(iCandidate)).path);
+        end
+        error(['Multiple processed P3 inputs match Sub%d Cond%d Run%d: %s. ' ...
+               'Keep only one current suffixed input for this run.'], ...
+              subID, condNumber, runNumber, strjoin(names, ', '));
+    end
+
+    selected = candidates(preferred);
+    inputFile = selected.path;
+    removedChannelIDs = selected.removedIDs;
+    outputBase = sprintf('Sub%d_Cond%d_run%d_withICA2%s.set', ...
+                         subID, condNumber, runNumber, selected.suffix);
+    outputFile = fullfile(subPath, outputBase);
+end
+
+function [isValid, removedChannelIDs] = parseP3Suffix(suffix)
+    isValid = true;
+    removedChannelIDs = {};
+
+    if isempty(suffix)
+        return;
+    end
+    if suffix(1) ~= '_'
+        isValid = false;
+        return;
+    end
+
+    tokens = strsplit(suffix(2:end), '_');
+    for iToken = 1:numel(tokens)
+        token = tokens{iToken};
+        channelMatch = regexpi(token, ...
+            '^([AB])([1-9]|[12][0-9]|3[0-2])removed$', 'tokens', 'once');
+
+        if ~isempty(channelMatch)
+            channelID = sprintf('%s%d', upper(channelMatch{1}), ...
+                                str2double(channelMatch{2}));
+            if any(strcmpi(removedChannelIDs, channelID))
+                error('Removed channel %s appears more than once in a P3 filename.', ...
+                      channelID);
+            end
+            removedChannelIDs{end+1} = channelID; %#ok<AGROW>
+        elseif ~strcmpi(token, 'epochRejected')
+            isValid = false;
+            removedChannelIDs = {};
+            return;
         end
     end
 end
 
-function chanlocsOut = channelLocationsForDataset(fullChanlocFile, removedChannelLabel, nChannels)
+function [chanlocsOut, removedLabels] = channelLocationsForDataset( ...
+        fullChanlocFile, removedChannelIDs, nChannels, sourceFile)
     fullChanlocs = readlocs(fullChanlocFile);
-
-    if isempty(removedChannelLabel)
-        chanlocsOut = fullChanlocs;
-    else
-        labels = {fullChanlocs.labels};
-        keep = ~strcmpi(labels, removedChannelLabel);
-        chanlocsOut = fullChanlocs(keep);
+    if numel(fullChanlocs) ~= 64
+        error('BioSemi64.loc must contain 64 channels, but it contains %d.', ...
+              numel(fullChanlocs));
     end
 
-    if numel(chanlocsOut) ~= nChannels
-        error(['Channel-location count mismatch. Expected %d labels for this ' ...
-               'dataset, but got %d from the channel-location file.'], ...
-              nChannels, numel(chanlocsOut));
+    expectedChannels = numel(fullChanlocs) - numel(removedChannelIDs);
+    if nChannels ~= expectedChannels
+        error(['Filename/channel-count mismatch in %s. The filename reports %d ' ...
+               'removed channel(s), so P3 expected %d data channels, but found %d.'], ...
+              sourceFile, numel(removedChannelIDs), expectedChannels, nChannels);
     end
+
+    removeIndices = zeros(1, numel(removedChannelIDs));
+    removedLabels = cell(1, numel(removedChannelIDs));
+    for iChannel = 1:numel(removedChannelIDs)
+        channelMatch = regexpi(removedChannelIDs{iChannel}, ...
+                               '^([AB])([1-9]|[12][0-9]|3[0-2])$', ...
+                               'tokens', 'once');
+        channelNumber = str2double(channelMatch{2});
+        removeIndices(iChannel) = channelNumber;
+        if strcmpi(channelMatch{1}, 'B')
+            removeIndices(iChannel) = removeIndices(iChannel) + 32;
+        end
+        removedLabels{iChannel} = strtrim(char( ...
+            fullChanlocs(removeIndices(iChannel)).labels));
+    end
+
+    keep = true(1, numel(fullChanlocs));
+    keep(removeIndices) = false;
+    chanlocsOut = fullChanlocs(keep);
 end
 
 function ensureEEGLABOnPath()
