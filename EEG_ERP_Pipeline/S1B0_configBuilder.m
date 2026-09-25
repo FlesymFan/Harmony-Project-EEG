@@ -1,9 +1,5 @@
 function cfg = S1B0_configBuilder()
 
-    fprintf('-----------------------------------------------------\n');
-    fprintf(' 1.B.0. configBuilder.m  (interactive config builder)\n');
-    fprintf('-----------------------------------------------------\n\n');
-
     % Start from a template
     if exist('templateConfig', 'file') == 2
         cfg = templateConfig();
@@ -67,30 +63,27 @@ function cfg = S1B0_configBuilder()
     end
 
     %--------------------------------------------------------------
-    % Priming / contrast pattern
+    % Condition display mode
     %--------------------------------------------------------------
-    fprintf('\nPriming / contrast type (which conditions to toggle):\n');
-    fprintf('  1 = SP group          (Exp_withSP + Unexp_withSP + Atonal)\n');
-    fprintf('  2 = noSP group        (Exp_noSP + Unexp_noSP + Atonal)\n');
-    fprintf('  3 = Diff with SP      (Diff_withSP only)\n');
-    fprintf('  4 = Diff without SP   (Diff_noSP only)\n');
-    fprintf('  5 = Atonal only       (Atonal only)\n');
+    fprintf('\nPriming condition display mode:\n');
+    fprintf('  1 = Single condition\n');
+    fprintf('  2 = Comparison\n');
 
     while true
-        s = strtrim(input('Choose 1–5 [default 1]: ', 's'));
+        s = strtrim(input('Choose 1 or 2 [default 2]: ', 's'));
         if isempty(s)
-            modeChoice = 1;
+            displayMode = 2;
             break;
         end
-        modeChoice = str2double(s);
-        if ismember(modeChoice, 1:5)
+        displayMode = str2double(s);
+        if ismember(displayMode, [1 2])
             break;
         else
-            fprintf('Please enter a number between 1 and 5.\n');
+            fprintf('Please enter 1 or 2.\n');
         end
     end
 
-    % Reset all toggles first
+    % Reset every condition before enabling the requested traces.
     cfg.Exp_noSP      = false;
     cfg.Unexp_noSP    = false;
     cfg.Diff_noSP     = false;
@@ -99,28 +92,80 @@ function cfg = S1B0_configBuilder()
     cfg.Diff_withSP   = false;
     cfg.Atonal        = false;
 
-    switch modeChoice
-        case 1  % SP group
-            cfg.Exp_withSP   = true;
-            cfg.Unexp_withSP = true;
-            cfg.Atonal       = true;
+    if displayMode == 1
+        fprintf('\nSingle condition:\n');
+        fprintf('  1 = Expected with sensory priming\n');
+        fprintf('  2 = Unexpected with sensory priming\n');
+        fprintf('  3 = Expected without sensory priming\n');
+        fprintf('  4 = Unexpected without sensory priming\n');
+        fprintf('  5 = Difference with sensory priming\n');
+        fprintf('  6 = Difference without sensory priming\n');
+        fprintf('  7 = Atonal\n');
 
-        case 2  % noSP group
-            cfg.Exp_noSP     = true;
-            cfg.Unexp_noSP   = true;
-            cfg.Atonal       = true;
+        while true
+            s = strtrim(input('Choose 1-7 [default 1]: ', 's'));
+            if isempty(s)
+                conditionChoice = 1;
+                break;
+            end
+            conditionChoice = str2double(s);
+            if ismember(conditionChoice, 1:7)
+                break;
+            else
+                fprintf('Please enter a number between 1 and 7.\n');
+            end
+        end
 
-        case 3  % Diff with SP
-            cfg.Diff_withSP  = true;
+        switch conditionChoice
+            case 1, cfg.Exp_withSP   = true;
+            case 2, cfg.Unexp_withSP = true;
+            case 3, cfg.Exp_noSP     = true;
+            case 4, cfg.Unexp_noSP   = true;
+            case 5, cfg.Diff_withSP  = true;
+            case 6, cfg.Diff_noSP    = true;
+            case 7, cfg.Atonal       = true;
+        end
+    else
+        fprintf('\nComparison:\n');
+        fprintf('  1 = SP group          (Exp_withSP + Unexp_withSP + Atonal)\n');
+        fprintf('  2 = noSP group        (Exp_noSP + Unexp_noSP + Atonal)\n');
+        fprintf('  3 = Diff with SP      (Diff_withSP only)\n');
+        fprintf('  4 = Diff without SP   (Diff_noSP only)\n');
+        fprintf('  5 = Atonal only       (Atonal only)\n');
 
-        case 4  % Diff without SP
-            cfg.Diff_noSP    = true;
+        while true
+            s = strtrim(input('Choose 1-5 [default 1]: ', 's'));
+            if isempty(s)
+                comparisonChoice = 1;
+                break;
+            end
+            comparisonChoice = str2double(s);
+            if ismember(comparisonChoice, 1:5)
+                break;
+            else
+                fprintf('Please enter a number between 1 and 5.\n');
+            end
+        end
 
-        case 5  % Atonal only
-            cfg.Atonal       = true;
+        switch comparisonChoice
+            case 1
+                cfg.Exp_withSP   = true;
+                cfg.Unexp_withSP = true;
+                cfg.Atonal       = true;
+            case 2
+                cfg.Exp_noSP     = true;
+                cfg.Unexp_noSP   = true;
+                cfg.Atonal       = true;
+            case 3
+                cfg.Diff_withSP  = true;
+            case 4
+                cfg.Diff_noSP    = true;
+            case 5
+                cfg.Atonal       = true;
+        end
     end
 
-        %--------------------------------------------------------------
+    %--------------------------------------------------------------
     % ROI / plot mode
     %--------------------------------------------------------------
     fprintf('\nROI / plot mode:\n');
@@ -187,5 +232,32 @@ function cfg = S1B0_configBuilder()
             cfg.plotMode = 'multiChannel';
             cfg.roiNames = [];
             cfg.selectedChannel = '';
+
+            % Channel set for the grid.
+            fprintf('\nChannel set:\n');
+            fprintf('  1 = Koelsch 20  (F7..P8, 4x5 grid)\n');
+            fprintf('  2 = All 64      (8x8 grid)\n');
+            fprintf('  3 = Custom subset (a lookup table will be shown)\n');
+            cs = str2double(strtrim(input('Choose 1-3 [default 1]: ', 's')));
+            switch cs
+                case 2
+                    cfg.channelMode = 'all64';
+                    cfg.channelList = [];
+                case 3
+                    cfg.channelMode = 'custom';
+                    cfg.channelList = [];   % S230 prints the table and prompts
+                otherwise
+                    cfg.channelMode = 'koelsch20';
+                    cfg.channelList = [];
+            end
     end
+
+    %--------------------------------------------------------------
+    % Individual traces and standard error
+    %--------------------------------------------------------------
+    s = strtrim(input('\nOverlay individual subject traces? (y/n) [n]: ', 's'));
+    cfg.plotIndividual = any(strcmpi(s, {'y','yes'}));
+
+    s = strtrim(input('Show standard error shading? (y/n) [y]: ', 's'));
+    cfg.plotSE = ~any(strcmpi(s, {'n','no'}));
 end

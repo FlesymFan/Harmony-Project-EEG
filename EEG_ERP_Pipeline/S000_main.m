@@ -32,7 +32,7 @@ end
 % PRESET MODE: generate all figures from S1A0_getPresetConfigs.m
 % =====================================================================
 if usePresets
-    fprintf('\n[Preset mode] Loading preset configurations (1.A.0. S1A0_getPresetConfigs.m)...\n');
+    fprintf('\n[Preset mode] Loading preset configurations...\n');
     
     configs = S1A0_getPresetConfigs();   % 1.A.0.
     if isempty(configs)
@@ -71,7 +71,7 @@ if usePresets
 else
     fprintf('\n[CUSTOM MODE]\n');
     fprintf('You can either:\n');
-    fprintf('  (1) Enter parameters interactively (S1B0_configBuilder.m), or\n');
+    fprintf('  (1) Enter parameters interactively, or\n');
     fprintf('  (2) Use an existing .m file that returns a config struct.\n\n');
     
     choice = [];
@@ -87,7 +87,7 @@ else
     switch choice
         % ---------------------- Manual config ----------------------------
         case 1
-            fprintf('\nBuilding configuration interactively (S1B0_configBuilder.m)...\n');
+            fprintf('\nBuilding configuration interactively...\n');
             cfg = S1B0_configBuilder();   % 1.B.0.
             
             if ~isfield(cfg, 'name') || isempty(cfg.name)

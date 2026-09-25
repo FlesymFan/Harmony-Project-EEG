@@ -1,28 +1,21 @@
 function hFig = S243_plotMultiChannel(cfg, Extract_Data_Indiv, meta, timeInfo)
 % Multi-channel ERP plotting with baseline correction
-% Default behavior: plot all channels in meta.channels (20) as a grid.
 
     condInfo = {
         'Exp_noSP',      cfg.Exp_noSP,      [0.6, 0,   0.6], 'Expected w/o SP';
         'Unexp_noSP',    cfg.Unexp_noSP,    [0,   0.6, 0.3], 'Unexpected w/o SP';
-        'Diff_noSP',     cfg.Diff_noSP,     [0.6, 0,   0.6], 'Unexp-Exp w/o. SP';
+        'Diff_noSP',     cfg.Diff_noSP,     [0.85,0.3, 0.1], 'Unexp-Exp w/o. SP';
         'Exp_withSP',    cfg.Exp_withSP,    [0.6, 0.8, 1],   'Expected w SP';
         'Unexp_withSP',  cfg.Unexp_withSP,  [0.9, 0.6, 0.4], 'Unexpected w SP';
         'Diff_withSP',   cfg.Diff_withSP,   [0,   0.6, 0],   'Unexp-Exp w. SP';
         'Atonal',        cfg.Atonal,        [0.5, 0.5, 0.5], 'Atonal'
     };
 
-    condsToPlot  = {};
-    colorsToPlot = {};
-    labelsToPlot = {};
-    for k = 1:size(condInfo,1)
-        if condInfo{k,2}
-            condsToPlot{end+1}  = condInfo{k,1}; %#ok<AGROW>
-            colorsToPlot{end+1} = condInfo{k,3}; %#ok<AGROW>
-            labelsToPlot{end+1} = condInfo{k,4}; %#ok<AGROW>
-        end
-    end
-
+    keep         = cell2mat(condInfo(:,2));
+    condsToPlot  = condInfo(keep,1);
+    colorsToPlot = condInfo(keep,3);
+    labelsToPlot = condInfo(keep,4);
+ 
     if isempty(condsToPlot)
         warning('S243_plotMultiChannel: no conditions toggled on; nothing to plot.');
         hFig = figure('Name','Multi Channel - Empty','Color','w');
@@ -30,168 +23,236 @@ function hFig = S243_plotMultiChannel(cfg, Extract_Data_Indiv, meta, timeInfo)
         axis off;
         return;
     end
-
-    % Time info
-    Start = timeInfo.Start;
-    numSubjects = meta.numSubjects;
-    newTimeAxis = timeInfo.newTimeAxis;
+ 
+    %---------------------- Channel selection ---------------------------
+    channelMode = lower(getOpt(cfg,'channelMode','koelsch20'));
+    channelList = getOpt(cfg,'channelList',[]);
+    [chLabels, chRowIdx] = S230_getROILabelAndIndices('select', channelMode, channelList);
+    nCh = numel(chRowIdx);
+ 
+    showSE    = getOpt(cfg,'plotSE',true);
+    showIndiv = getOpt(cfg,'plotIndividual',false);
+    yFixed    = getOpt(cfg,'yLim',[]);
+    individualYLim = getOpt(cfg,'individualYLim',[-10 10]);
+    groupYLim      = getOpt(cfg,'groupYLim',[-5 5]);
+    indivLW    = getOpt(cfg,'indivLineWidth',0.6);
+    indivAlpha = getOpt(cfg,'indivLineAlpha',0.20);
+    meanLW     = getOpt(cfg,'multiMeanLineWidth',2.5);
+ 
+    t_ms  = timeInfo.newTimeAxis;
     inWin = timeInfo.inWin;
-    baselineIdx_old = timeInfo.baselineIdx_old;
-    expectOnsetRemapped = timeInfo.expectOnsetRemapped;
-    unexpectOnsetRemapped = timeInfo.unexpectOnsetRemapped;
-
-    % Channels to plot
-    chLabels = meta.channels;
-    chRowIdx = meta.channel_indices;
-
-    nRowsPlot = 4;
-    nColsPlot = 5;
-    nChTarget = nRowsPlot * nColsPlot;
-    nCh = min(numel(chLabels), nChTarget);
-
-    % Figure (widen to accommodate legend column)
-    hFig = figure('Name','Multi Channel','Color','w','Visible','on');
-    try
-        pos = get(hFig, 'Position');
-        pos(3) = round(pos(3) * 1.35); % widen more so plots keep size
-        set(hFig, 'Position', pos);
-    catch
+    x     = t_ms(inWin);
+ 
+    %---------------------- Grid geometry -------------------------------
+    if nCh <= 20
+        nColsPlot = 5;
+    elseif nCh <= 36
+        nColsPlot = 6;
+    else
+        nColsPlot = 8;
     end
+    nRowsPlot = ceil(nCh / nColsPlot);
+    nCols     = nColsPlot + 1;              % last column holds the legend
+ 
+    hFig = figure('Name','Multi Channel','Color','w','Visible','on');
+    set(hFig,'Units','normalized','OuterPosition',[0.02 0.05 0.96 0.88]);
+ 
+    t = tiledlayout(nRowsPlot, nCols, 'TileSpacing','compact', 'Padding','compact');
 
-    % Tiled layout: 4 rows × (5 plot cols + 1 legend col)
-    nRows = nRowsPlot;
-    nCols = nColsPlot + 1; % 6
-    t = tiledlayout(nRows, nCols, 'TileSpacing','compact', 'Padding','compact');
-
-    % Legend panel tile (row 1 col 6) spanning 4 rows
-    legTileIndex = nCols; % tile #6 in first row
-    axLeg = nexttile(t, legTileIndex, [nRows 1]);
-    axis(axLeg, 'off');
-    set(axLeg, 'HitTest', 'off'); % avoid accidental clicks
-
-    % Capture deterministic legend handles from FIRST plotted tile only
+    % tiledlayout clears existing axes, so add the hover label after it.
+    if showIndiv, makeHoverLabel(hFig); end
+    useTips = showIndiv && (nCh * meta.numSubjects * numel(condsToPlot)) <= 100;
+    axLeg = nexttile(t, nCols, [nRowsPlot 1]);
+    axis(axLeg,'off'); set(axLeg,'HitTest','off');
+ 
     legLines  = gobjects(0);
     legLabels = {};
-
+    axAll     = gobjects(1,nCh);
+ 
     for ch = 1:nCh
         row = ceil(ch / nColsPlot);
-        col = mod(ch-1, nColsPlot) + 1;     % 1..5 (plot columns only)
-        tileIdx = (row-1)*nCols + col;      % map into 6-column layout
-
-        ax = nexttile(t, tileIdx);
-        hold(ax, 'on');
-
-        rowIdx  = chRowIdx(ch);
-        chLabel = chLabels(ch);
-
+        col = mod(ch-1, nColsPlot) + 1;
+        ax  = nexttile(t, (row-1)*nCols + col);
+        axAll(ch) = ax;
+        hold(ax,'on');
+ 
         for c = 1:numel(condsToPlot)
-            condName = condsToPlot{c};
-            cColor   = colorsToPlot{c};
-            cLabel   = labelsToPlot{c};
-
-            dataCond = Extract_Data_Indiv.(condName);     % subj × ch × time
-            chData   = squeeze(dataCond(:, rowIdx, :));   % subj × time
-
-            if numSubjects == 1
-                chData = reshape(chData, [1, numel(chData)]);
+            cColor = colorsToPlot{c};
+            tr = prepareTraces(Extract_Data_Indiv.(condsToPlot{c}), ...
+                               chRowIdx(ch), timeInfo.baselineIdx_old);
+ 
+            if showIndiv && tr.n > 1
+                for s = 1:tr.n
+                    ys = tr.indiv(s, inWin);
+                    hInd = plot(ax, x, ys, 'LineWidth', indivLW, ...
+                                'Color', [cColor indivAlpha], 'HandleVisibility','off');
+                    attachSubjectTip(hInd, cleanSubjectName(meta.subjectNames{s}), labelsToPlot{c}, useTips);
+                end
             end
-
-            grandMean = mean(chData, 1);
-            if numSubjects > 1
-                sem = std(chData, 0, 1) / sqrt(numSubjects);
-            else
-                sem = zeros(size(grandMean));
+ 
+            y = tr.mean(inWin);
+            if showSE && tr.n > 1
+                ub = y + tr.sem(inWin);
+                lb = y - tr.sem(inWin);
+                fill(ax, [x fliplr(x)], [ub fliplr(lb)], cColor, ...
+                     'FaceAlpha', 0.2, 'EdgeColor','none', 'HandleVisibility','off', ...
+                     'PickableParts','none');
             end
-
-            % Baseline correction
-            baseline    = mean(grandMean(baselineIdx_old));
-            waveBC_full = grandMean - baseline;
-
-            ub_full = waveBC_full + sem;
-            lb_full = waveBC_full - sem;
-
-            x  = newTimeAxis(inWin);
-            y  = waveBC_full(inWin);
-            ub = ub_full(inWin);
-            lb = lb_full(inWin);
-
-            if cfg.plotSE
-                hLine = plot(ax, x, y, 'LineWidth', 1.5, 'Color', cColor);
-                fill(ax, [x, fliplr(x)], [ub, fliplr(lb)], cColor, ...
-                     'FaceAlpha', 0.2, 'EdgeColor', 'none', 'HandleVisibility', 'off');
-            else
-                hLine = plot(ax, x, y, 'LineWidth', 1.5, 'Color', cColor);
-            end
-
-            % Keep legend handles ONLY from the first channel
+ 
+            hLine = plot(ax, x, y, 'LineWidth', meanLW, 'Color', cColor);
+ 
+            % Legend handles come from the first tile only.
             if ch == 1
-                hLine.DisplayName = cLabel;
-                legLines(end+1)  = hLine;   %#ok<AGROW>
-                legLabels{end+1} = cLabel;  %#ok<AGROW>
+                hLine.DisplayName = labelsToPlot{c};
+                legLines(end+1)   = hLine;            %#ok<AGROW>
+                legLabels{end+1}  = labelsToPlot{c};  %#ok<AGROW>
             else
                 hLine.HandleVisibility = 'off';
             end
         end
-
-        % Onsets (no legend)
-        if cfg.plotCloseUp
-            xline(ax, unexpectOnsetRemapped, '--', 'Color', [0 0 0], 'LineWidth', 1, 'HandleVisibility','off');
-            xlim(ax, [Start, 3600]);
-        else
-            xline(ax, expectOnsetRemapped(1), '--', 'Color', [0.2 0.4 1], 'LineWidth', 1, 'HandleVisibility','off');
-            for i = 2:numel(expectOnsetRemapped)
-                xline(ax, expectOnsetRemapped(i), '--', 'Color', [0.2 0.4 1], 'LineWidth', 1, 'HandleVisibility','off');
+ 
+        if ~cfg.plotCloseUp
+            onsets = timeInfo.expectOnsetRemapped;
+            for i = 1:numel(onsets)
+                xline(ax, onsets(i), '--', 'Color',[0.2 0.4 1], ...
+                      'LineWidth', 1, 'HandleVisibility','off');
             end
-            xline(ax, unexpectOnsetRemapped, '--', 'Color', [0 0 0], 'LineWidth', 1.5, 'HandleVisibility','off');
-            xlim(ax, [Start, 4600]);
         end
-
-        yline(ax, 0, '--', 'Color', [0 0 0], 'LineWidth', 1, 'HandleVisibility','off');
-
-        title(ax, string(chLabel), 'FontSize', 10);
-        set(ax, 'FontName', 'Arial', 'FontSize', 9, 'LineWidth', 1);
-        ylim(ax, [-5, 5]);
-
-        if cfg.yAxisFlip
-            set(ax, 'YDir', 'reverse');
-        end
-
-        % Reduce tick clutter
-        if row < nRowsPlot
-            set(ax, 'XTickLabel', []);
-        end
-        if col ~= 1
-            set(ax, 'YTickLabel', []);
-        end
-
-        hold(ax, 'off');
+        xline(ax, timeInfo.unexpectOnsetRemapped, '--', 'Color',[0 0 0], ...
+              'LineWidth', 1.5, 'HandleVisibility','off');
+        yline(ax, 0, '--', 'Color',[0 0 0], 'LineWidth', 1, 'HandleVisibility','off');
+ 
+        xlim(ax, [timeInfo.Start, timeInfo.End]);
+        title(ax, char(chLabels(ch)), 'FontSize', 10);
+        set(ax, 'FontName','Arial', 'FontSize', 9, 'LineWidth', 1);
+        if row < nRowsPlot, set(ax,'XTickLabel',[]); end
+        if col ~= 1,        set(ax,'YTickLabel',[]); end
+        hold(ax,'off');
     end
-
-    % Global title
-    sgtitle([meta.conditionNames(meta.conditionNumber), ' (Condition ', num2str(meta.conditionNumber), ')'], ...
-            'FontSize', 18);
-
-    % ---- Legend: place it inside the legend tile region (figure-normalized) ----
+ 
+    %---------------------- Shared y limits -----------------------------
+    if ~isempty(yFixed)
+        yl = yFixed;
+    elseif showIndiv
+        yl = individualYLim;
+    else
+        yl = groupYLim;
+    end
+    for ch = 1:nCh
+        ylim(axAll(ch), yl);
+        if getOpt(cfg,'yAxisFlip',false)
+            set(axAll(ch),'YDir','reverse');
+        end
+    end
+ 
+    %---------------------- Labels and legend ---------------------------
+    xlabel(t, 'Time (ms)', 'FontSize', 12);
+    ylabel(t, 'Amplitude (\muV)', 'FontSize', 12);
+    title(t, sprintf('%s (Condition %d)  |  n = %d  |  %s', ...
+          meta.conditionNames(meta.conditionNumber), meta.conditionNumber, ...
+          meta.numSubjects, channelMode), 'FontSize', 16, 'FontWeight','bold');
+ 
     if ~isempty(legLines)
         lgd = legend(legLines, legLabels);
-        lgd.Box = 'on';
-        lgd.FontName = 'Arial';
-        lgd.FontSize = 8;
+        lgd.Box = 'off'; lgd.Color = 'none';
+        lgd.FontName = 'Arial'; lgd.FontSize = 9;
         lgd.Orientation = 'vertical';
+        lgd.Units = 'normalized'; axLeg.Units = 'normalized';
+        p = axLeg.Position;
+        lgd.Position = [p(1)+0.03*p(3), p(2)+0.72*p(4), 0.92*p(3), 0.24*p(4)];
+        uistack(lgd,'top');
+ 
+        note = sprintf('n = %d subjects', meta.numSubjects);
+        if showIndiv, note = [note newline 'faint = individual']; end
+        if showSE,    note = [note newline 'shaded = ' char(177) '1 SEM']; end
+        text(axLeg, 0.05, 0.60, note, 'Units','normalized', ...
+             'FontSize', 9, 'VerticalAlignment','top', 'Color',[0.3 0.3 0.3]);
+    end
+end
+ 
+% Attach the subject name to an individual trace, for hover readout and
+% for the data tip shown when the trace is clicked.
+function attachSubjectTip(hLine, subjName, condLabel, withTip)
+    hLine.Tag      = 'indivTrace';
+    hLine.UserData = struct('subject', subjName, 'cond', condLabel);
 
-        % Put legend in figure normalized units using axLeg position as reference
-        lgd.Units = 'normalized';
-        axLeg.Units = 'normalized';
-        p = axLeg.Position;  % [x y w h] in figure normalized units
+    % The data-tip rows need one string per sample, so they are only worth
+    % building for a modest number of traces. Hover still works either way.
+    if ~withTip, return; end
 
-        % Padding inside the legend panel (tweak these if desired)
-        padX = 0.05 * p(3);
-        padY = 0.05 * p(4);
+    try
+        n   = numel(hLine.XData);
+        tip = hLine.DataTipTemplate;
+        tip.DataTipRows(1).Label = 'Time (ms)';
+        tip.DataTipRows(2).Label = 'Amplitude (uV)';
+        tip.DataTipRows(end+1)   = dataTipTextRow('Subject', repmat(string(subjName),1,n));
+        tip.DataTipRows(end+1)   = dataTipTextRow('Condition', repmat(string(condLabel),1,n));
+    catch
+        % DataTipTemplate needs R2019a; the hover readout still works.
+    end
+end
 
-        % Place near the top-left inside the legend panel
-        lgd.Position = [p(1) + padX, p(2) + p(4) - 0.30*p(4), 0.90*p(3), 0.25*p(4)];
+% Small floating label that follows the cursor and names the trace under it.
+function makeHoverLabel(hFig)
+    lbl = uicontrol(hFig, 'Style','text', 'Units','pixels', ...
+                    'BackgroundColor',[1 1 0.85], 'ForegroundColor',[0 0 0], ...
+                    'FontName','Arial', 'FontSize', 9, ...
+                    'HorizontalAlignment','left', 'Visible','off');
+    setappdata(hFig, 'hoverLabel', lbl);
+    set(hFig, 'WindowButtonMotionFcn', @(src,~) hoverFcn(src));
+end
 
-        % Ensure legend draws on top of axes
-        uistack(lgd, 'top');
+function hoverFcn(hFig)
+    lbl = getappdata(hFig, 'hoverLabel');
+    if isempty(lbl) || ~isvalid(lbl), return; end
+
+    obj = hittest(hFig);
+    if ~isempty(obj) && isprop(obj,'Tag') && strcmp(obj.Tag,'indivTrace') ...
+            && isstruct(obj.UserData) && isfield(obj.UserData,'subject')
+        str = sprintf(' %s  |  %s ', obj.UserData.subject, obj.UserData.cond);
+        oldU = hFig.Units; hFig.Units = 'pixels';
+        p = hFig.CurrentPoint; hFig.Units = oldU;
+        w = 7.2*numel(str) + 10;
+        set(lbl, 'String', str, 'Position', [p(1)+14, p(2)+14, w, 18], ...
+                 'Visible','on');
+        uistack(lbl,'top');
+    else
+        set(lbl, 'Visible','off');
+    end
+end
+
+% Strip the trailing _condN from an EEGDataAvg field name for display.
+function s = cleanSubjectName(raw)
+    s = regexprep(char(raw), '_[cC]ond\d+$', '');
+end
+
+% Baseline each subject before averaging, then take the SEM across
+% subjects. Keep identical to the copies in S241 and S242.
+function tr = prepareTraces(dataCond, rowIdx, baselineIdx)
+    nSubj = size(dataCond,1);
+    sub   = dataCond(:, rowIdx, :);
+    if numel(rowIdx) > 1
+        sub = mean(sub, 2);
+    end
+    sub = reshape(sub, nSubj, []);
+ 
+    base  = mean(sub(:, baselineIdx), 2);
+    indiv = sub - base;
+ 
+    tr.indiv = indiv;
+    tr.mean  = mean(indiv, 1);
+    tr.n     = nSubj;
+    if nSubj > 1
+        tr.sem = std(indiv, 0, 1) / sqrt(nSubj);
+    else
+        tr.sem = zeros(1, size(indiv,2));
+    end
+end
+ 
+function v = getOpt(s, f, dflt)
+    if isfield(s, f) && ~isempty(s.(f))
+        v = s.(f);
+    else
+        v = dflt;
     end
 end

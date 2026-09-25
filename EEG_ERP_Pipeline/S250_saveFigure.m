@@ -47,12 +47,23 @@ function S250_saveFigure(hFig, cfg, meta)
         end
     end
 
+    %---------------------- Drop live-only interactivity ----------------
+    % The hover readout is a figure callback plus a floating uicontrol.
+    % Neither survives a reload, so remove them before saving. Data tips
+    % on the individual traces are stored with the lines and do persist.
+    if ishghandle(hFig)
+        set(hFig, 'WindowButtonMotionFcn', '');
+        lbl = getappdata(hFig, 'hoverLabel');
+        if ~isempty(lbl) && isvalid(lbl), delete(lbl); end
+        if isappdata(hFig, 'hoverLabel'), rmappdata(hFig, 'hoverLabel'); end
+    end
+
     %---------------------- Save as .fig --------------------------------
     try
         savefig(hFig, fullPathFig);
         fprintf('Saved figure (FIG): %s\n', fullPathFig);
     catch ME
-        warning('S250_saveFigure: savefig failed: %s', ME.message);
+        warning('S250_saveFigure:savefigFailed', 'savefig failed: %s', ME.message);
     end
 
     %---------------------- Close the figure ----------------------------

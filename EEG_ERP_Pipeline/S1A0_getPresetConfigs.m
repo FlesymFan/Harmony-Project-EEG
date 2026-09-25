@@ -58,7 +58,10 @@ function configs = S1A0_getPresetConfigs()
         'Exp_noSP','Unexp_noSP','Diff_noSP', ...
         'Exp_withSP','Unexp_withSP','Diff_withSP','Atonal', ...
         'plotIndividual','plotSE','plotCloseUp','yAxisFlip', ...
-        'plotMode','roiNames','selectedChannel' ...
+        'indivLineWidth','indivLineAlpha','meanLineWidth','multiMeanLineWidth', ...
+        'plotMode','roiNames','selectedChannel', ...
+        'channelMode','channelList','yLim','individualYLim','groupYLim', ...
+        'srate','epochStart_ms','chordSOA_ms' ...
     };
 
     % Canonicalize base: only keep requiredFields, with defaults if missing
@@ -85,6 +88,28 @@ function configs = S1A0_getPresetConfigs()
                     canon.(f) = ["F7","F3","FT7","FC3"];
                 case 'selectedChannel'
                     canon.(f) = 'Fz';
+                case 'indivLineWidth'
+                    canon.(f) = 0.6;
+                case 'indivLineAlpha'
+                    canon.(f) = 0.20;
+                case 'meanLineWidth'
+                    canon.(f) = 4.0;
+                case 'multiMeanLineWidth'
+                    canon.(f) = 2.5;
+                case 'channelMode'
+                    canon.(f) = 'koelsch20';
+                case {'channelList','yLim'}
+                    canon.(f) = [];
+                case 'individualYLim'
+                    canon.(f) = [-10 10];
+                case 'groupYLim'
+                    canon.(f) = [-5 5];
+                case 'srate'
+                    canon.(f) = 1024;
+                case 'epochStart_ms'
+                    canon.(f) = -100;
+                case 'chordSOA_ms'
+                    canon.(f) = 500;
                 otherwise
                     canon.(f) = [];
             end
