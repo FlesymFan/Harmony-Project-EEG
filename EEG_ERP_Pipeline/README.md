@@ -12,11 +12,15 @@ Editable diagram source: `erp_pipeline_diagram.drawio`
 
 In these files, each subject has already been averaged across trials within each trial category. In other words, the pipeline starts after the single-trial EEG data have been reduced to one ERP waveform per subject, condition, and trial category.
 
-The current project copy contains the finished 15-subject ERP dataset:
+The original cohort contains these 15 subjects:
 
 `Sub1, Sub2, Sub5, Sub6, Sub8, Sub9, Sub10, Sub11, Sub12, Sub13, Sub14, Sub16, Sub17, Sub19, Sub20`
 
-Subjects 24-28 are not expected to be included yet. They should be preprocessed and folded into the dataset later.
+The later cohort contains `Sub24` through `Sub28`. The number of subjects plotted
+depends on which subject fields are present in the selected averaged files; it is
+not fixed by this README. This pipeline does not correct differences in stimulus
+timing between cohorts, so verify timing compatibility before interpreting a
+pooled time-locked waveform.
 
 ## Data Level
 
@@ -34,7 +38,7 @@ The files named `EEGDataAvgAcrossTrials_allSubject_cond*.mat` correspond to step
 
 The ERP plotting code then computes grand-average waveforms and standard error across subjects.
 
-In the current 15-subject dataset, each averaged condition file is organized like this:
+Each averaged condition file is organized like this:
 
 ```text
 EEGDataAvgAcrossTrials_allSubject_cond1.mat
@@ -67,7 +71,9 @@ group array in S210:        subjects x channels x time
 grand average output:       channels x time
 ```
 
-For the current dataset, `subjects = 15`. The code infers `channels` and `time` directly from the loaded file, but the expected EEG matrix shape is approximately `64 x 5222` for each subject-level trial-category ERP.
+The `subjects` dimension is the number of subject fields in the loaded file.
+The code infers `channels` and `time` from the data; the expected EEG matrix
+shape is approximately `64 x 5222` for each subject-level trial-category ERP.
 
 ## Conditions
 
@@ -171,14 +177,9 @@ enabled, because duplicating the full 20- or 64-channel grid would make each
 plot too small. Its individual traces are still thinner and fainter than its
 group-average ERP.
 
-ROI-average and single-channel figures that contain individual traces include a
-toggle button in the upper-left figure margin. The toggle highlights subjects
-24-28 with thicker, opaque traces in the complementary color of each condition;
-neutral Atonal traces use black. Turning the toggle off restores the original
-line colors, widths, and transparency. The control is stored in the `.fig` file,
-and `S244_cohortHighlight.m` must remain on the MATLAB path when a saved figure
-is reopened. Set `cfg.highlightSubjects` to another numeric subject list before
-plotting to highlight a different group.
+ROI-average and single-channel figures with individual traces include an optional
+subject-highlight toggle. Set `cfg.highlightSubjects` to choose its subjects;
+the default is subjects 24-28. See `S244_cohortHighlight.m` below.
 
 ## Pipeline Steps
 
@@ -204,7 +205,8 @@ This function:
 - computes standard error across subjects
 - stores metadata such as subject names, channel names, and condition labels
 
-The current code loops over all subjects found in the loaded file, so it should automatically use the full current 15-subject dataset.
+The code uses all subject fields found in the selected averaged file. Check that
+the file contains the intended subjects before generating group plots.
 
 ### `S220_timeBaselineInfo.m`
 
@@ -259,6 +261,24 @@ Plots ERP traces for one selected channel.
 ### `S243_plotMultiChannel.m`
 
 Plots ERP traces across multiple channels.
+
+### `S244_cohortHighlight.m`
+
+Adds the highlight button to ROI-average and single-channel figures that show
+individual subject traces. It targets subjects 24-28 by default, or the list in
+`cfg.highlightSubjects`. Clicking the button makes those subject traces thicker
+and changes their colors; clicking again restores their original appearance.
+It does not change the EEG data, the group mean, the SEM, or any statistics.
+Saved interactive `.fig` files need this function on the MATLAB path for their
+button to work after reopening.
+
+### `S245_FigureDeck.m`
+
+Optional browser for saved ERP `.fig` files. It filters figures by trial view,
+filtering condition, plotted content, and ROI, then opens one as a previous/next
+deck or several for comparison. It is not called by `S000_main.m` and does not
+process EEG data. If a saved figure has individual traces, the browser can also
+restore its subject-highlight button through `S244_cohortHighlight.m`.
 
 ### `S250_saveFigure.m`
 
@@ -332,19 +352,10 @@ The current project copy already contains a complete 31-file output set in:
 Mehta/EEG_ERP_Pipeline/figures
 ```
 
-## Notes From Current Workspace Check
+## Dataset Updates
 
-The ERP pipeline was inspected against the current copied dataset. The data files used by this pipeline contain 15 subject fields, matching the current finished participant set.
-
-The code path in `S210_dataLoading.m` loops over all available subject fields, so the ERP pipeline itself does not appear to need changes before continuing preprocessing for subjects 24-28.
-
-During this check, MATLAB did not successfully run in the Codex desktop environment because MATLAB startup stopped before reaching project code:
-
-- default batch launch failed while loading a MATLAB settings plugin
-- using a temporary preference folder then failed with MathWorks services/licensing error 5202
-
-Because of that local MATLAB startup issue, this check confirms the pipeline by file structure and source inspection, not by a completed live MATLAB rerun.
-
-## Current Next Data Step
-
-The remaining data-work item is to finish preprocessing subjects 24-28, then regenerate the all-subject and averaged condition files before rerunning the ERP figures.
+When preprocessing changes the subject set, regenerate the P7 all-subject files
+and the P8 averaged files before rerunning ERP plots. Confirm the subject count
+shown on each figure and keep cohort timing differences in mind. Cohort ERP
+comparison and EEG autocorrelation timing diagnostics are not part of this
+plotting pipeline.
